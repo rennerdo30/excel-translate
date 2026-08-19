@@ -6,3 +6,8 @@ __pycache__/
 docs/
 node_modules/
 *.log
+
+# Never bake TLS material into an image layer — certs are mounted at runtime
+# (see docker-compose.yml). Images get tagged, pushed and shared; keys must not
+# travel with them.
+certs/

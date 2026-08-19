@@ -2,7 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY certs ./certs
+# certs/ is deliberately NOT copied: baking a TLS private key into an image
+# layer would ship it with every tag and push. Mount it at runtime instead
+# (docker-compose.yml mounts ./certs read-only).
 COPY scripts ./scripts
 COPY web ./web
 

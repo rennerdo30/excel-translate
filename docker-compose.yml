@@ -5,7 +5,14 @@ services:
       dockerfile: Dockerfile
     container_name: excel-translate-addin-host
     ports:
-      - "3000:3000"
+      # Loopback on purpose: the translate proxy is unauthenticated, so it must
+      # not be reachable from the LAN. HOST=0.0.0.0 below binds inside the
+      # container only; this mapping is what limits host exposure.
+      - "127.0.0.1:3000:3000"
+    volumes:
+      # Your locally generated cert/key, mounted read-only rather than baked
+      # into the image. Generate them first (see the docs).
+      - ./certs:/app/certs:ro
     environment:
       HOST: "0.0.0.0"
       PORT: "3000"

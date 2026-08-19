@@ -82,10 +82,12 @@ finished with the add-in.
     npm run docker:up
     ```
 
-    This runs `docker compose up --build -d`. The image copies `certs/`, `scripts/` and `web/` in, so
-    the certificate must already exist when you build. The container listens on `0.0.0.0:3000`,
-    published as `https://localhost:3000`, and reaches LM Studio through
-    `http://host.docker.internal:1234/v1`.
+    This runs `docker compose up --build -d`. The image contains only `scripts/` and `web/`;
+    `certs/` is **mounted read-only at runtime** rather than copied in, so a TLS private key never
+    ends up inside an image layer. The certificate must exist on the host before you start the
+    container. It binds `0.0.0.0:3000` inside the container, published to the host as
+    `127.0.0.1:3000` only — the proxy is unauthenticated, so it is deliberately not reachable from
+    your LAN. It reaches LM Studio through `http://host.docker.internal:1234/v1`.
   </TabItem>
   <TabItem label="Python directly">
     ```bash

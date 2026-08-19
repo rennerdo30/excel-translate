@@ -63,14 +63,22 @@ pending for some time.
 ## Docker configuration
 
 `docker-compose.yml` defines a single service, `addin-host`, built from the local `Dockerfile`
-(`python:3.12-slim`), named `excel-translate-addin-host`, publishing `3000:3000` with:
+(`python:3.12-slim`), named `excel-translate-addin-host`, publishing `127.0.0.1:3000:3000` with:
 
 ```yaml
+ports:
+  - "127.0.0.1:3000:3000"
+volumes:
+  - ./certs:/app/certs:ro
 environment:
   HOST: "0.0.0.0"
   PORT: "3000"
   LM_STUDIO_BASE_URL: "http://host.docker.internal:1234/v1"
 ```
+
+`HOST: "0.0.0.0"` binds inside the container; the `127.0.0.1` prefix on the port mapping is what
+keeps the unauthenticated proxy off your LAN. Do not drop that prefix. `certs/` is mounted read-only
+instead of being copied into the image, so your private key is not baked into a shareable layer.
 
 Add `LM_STUDIO_MODEL` there if you want to pin a model for the containerised host.
 

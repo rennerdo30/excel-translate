@@ -51,10 +51,12 @@ Both files must exist. Generate them as shown in
 [Installation](/excel-translate/getting-started/installation/). The repository ships no key material
 on purpose.
 
-## The Docker build fails on `COPY certs ./certs`
+## The container starts but TLS fails
 
-The `Dockerfile` copies `certs/` into the image, so the certificate has to exist on the host **before**
-you build. Generate it first, then run `npm run docker:up` again.
+`certs/` is mounted into the container read-only at runtime, so the certificate and key must exist on
+the host **before** you start it. Generate them first, then run `npm run docker:up` again. They are
+intentionally not copied into the image — a key inside an image layer would travel with every tag and
+push.
 
 ## Excel refuses to load the add-in, or the pane is blank
 
