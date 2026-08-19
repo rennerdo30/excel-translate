@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cell Translator</title>
+    <link rel="stylesheet" href="/taskpane.css" />
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Excel Formula Add-in</p>
+        <h1>Translate with worksheet formulas</h1>
+        <p class="intro">
+          This add-in registers custom functions in Excel, so you can translate directly from
+          formulas instead of clicking a button in a task pane.
+        </p>
+      </section>
+
+      <section class="panel">
+        <p class="field-label">Use these formulas</p>
+        <div class="formula-list">
+          <code>=XLT.TRANSLATE(A2,"de")</code>
+          <code>=XLT.TRANSLATE(A2,"en","de")</code>
+          <code>=XLT.TRANSLATE_RANGE(A2:B10,"fr")</code>
+        </div>
+      </section>
+
+      <section class="panel form-grid">
+        <div class="field">
+          <span>Default backend</span>
+          <div class="readonly-box">LM Studio via the local proxy and the currently loaded model</div>
+        </div>
+        <div class="field">
+          <span>Local add-in host</span>
+          <div class="readonly-box"><code>https://localhost:3000</code></div>
+        </div>
+      </section>
+
+      <section class="panel actions">
+        <button id="healthButton" class="primary" type="button">Check local host</button>
+      </section>
+
+      <section class="panel">
+        <p class="field-label">Status</p>
+        <div id="status" class="status">Waiting for Excel.</div>
+      </section>
+    </main>
+
+    <script src="/taskpane.js"></script>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+---
+title: Architecture
+description: How the manifest, custom-functions runtime, Python proxy, and LM Studio fit together.
+---
+
+## Components
+
+```text
+Excel for Mac
+  └─ manifest.xml  (sideloaded into .../Containers/com.microsoft.Excel/.../wef)
+       ├─ taskpane.html   ← setup/help pane
+       └─ CustomFunctions extension point
+            ├─ functions.html   (page the runtime loads)
+            ├─ functions.js     (implementations, namespace XLT)
+            └─ functions.json   (metadata: names, params, dimensionality)
+
+scripts/dev_server.py   HTTPS host on :3000
+  ├─ static files from web/
+  ├─ GET  /api/health
+  └─ POST /api/translate  ──▶  LM Studio  /v1/chat/completions
+                                          /v1/models
+```
+
+## Repository layout
+
+| Path | Role |
+| --- | --- |
+| `manifest.xml` | Task-pane add-in manifest declaring the `XLT` namespace, the `CustomFunctionsRuntime` 1.1 requirement, and `https://localhost:3000` as an `AppDomain` |
+| `web/taskpane.html` / `.css` / `.js` | Setup and help pane with a "Check local host" button that calls `/api/health` |
+| `web/functions.html` | Minimal page the custom-functions runtime loads; pulls in `office.js` and `functions.js` |
+| `web/functions.js` | `TRANSLATE` and `TRANSLATE_RANGE`, registered with `CustomFunctions.associate` |
+| `web/functions.json` | Custom-function metadata consumed by Excel |
+| `scripts/dev_server.py` | HTTPS static host plus translation proxy, standard library only |
+| `scripts/install_manifest.sh` | Copies the manifest into Excel's macOS sideload folder |
+| `scripts/trust-localhost-cert.sh` | Adds `certs/localhost.pem` to the login keychain as a trusted root |
+| `scripts/reset-excel-cache.sh` | Clears Excel's sideload and web caches so a changed manifest can re-register |
+| `scripts/docker-*.sh` | Thin wrappers around `docker compose` |
+| `Dockerfile`, `docker-compose.yml` | Containerised host based on `python:3.12-slim` |
+| `docs/` | This Astro Starlight documentation site |
+
+## Request path for one formula
+
+1. A cell evaluates `=XLT.TRANSLATE(A2,"de")`. Excel calls the `translate` function in
+   `web/functions.js`.
+2. The function trims the input, resolves the target language, defaults the source language to
+   `auto`, and returns `""` immediately when the text is empty.
+3. It `POST`s to the relative URL `/api/translate` — the add-in is served from
+   `https://localhost:3000`, so the request goes back to the same host.
+4. `AddInHandler.do_POST` validates the payload: `targetLanguage` must be present, `texts` must be a
+   non-empty list, and at most 128 values are accepted.
+5. `_get_lm_studio_model` returns `LM_STUDIO_MODEL` if set; otherwise it calls `GET /v1/models` and
+   takes the first id.
+6. `_translate_with_lm_studio` loops over the values, sending one `POST /v1/chat/completions` per
+   value with a translation system prompt and `temperature: 0.1`.
+7. The assistant content of each response is trimmed and collected, then returned as
+   `{"translations": [...]}`.
+8. `functions.js` normalises the strings and hands them back to Excel.
+
+`TRANSLATE_RANGE` follows the same path, except it flattens the matrix into non-empty values with
+recorded positions, splits them into chunks of 64 per request, and reassembles a matrix of the
+original shape for Excel to spill.
+
+## Design choices
+
+**No build tooling.** The add-in payload is static HTML/CSS/JS loaded directly by Excel's webview.
+There is no bundler, no TypeScript compile step, and no `node_modules` for the add-in itself — the
+root `package.json` exists only to name the npm scripts.
+
+**Python standard library only.** `dev_server.py` uses `http.server`, `ssl`, `json` and `urllib`. No
+`pip install` step and no virtualenv are needed for the server to run.
+
+**HTTPS is mandatory, so certificates are the user's job.** Office Add-ins are loaded over HTTPS, and
+Excel refuses an untrusted certificate. Rather than shipping a key pair — which would be a published
+private key anyone could use to impersonate `localhost` on a machine that trusted it — the repository
+ships no key material at all, and the server refuses to start until you generate your own.
+
+**Same-origin proxy instead of direct calls.** The functions request the relative path
+`/api/translate`, so everything stays on the add-in's own HTTPS origin. That keeps LM Studio's plain
+HTTP endpoint out of the webview (where it would be mixed content) and concentrates all configuration
+in one process.
+
+**Errors as text, not Excel error values.** Failures are returned as `[translation failed: ...]`
+strings so the cause is readable in the cell rather than collapsing to `#VALUE!`.
+
+## Known limitations
+
+- Translations are issued one model call per cell, sequentially. There is no batching into a single
+  prompt and no concurrency, so throughput is bounded by model latency times the cell count.
+- No caching. Recalculating a formula re-translates the text.
+- `/api/health` and `/api/translate` are unauthenticated. The host is intended for loopback use only.
+- `web/functions.js` sends a `provider: "lm_studio"` field in the request body; the server ignores it
+  and always uses LM Studio.
+- The host and port appear in `manifest.xml` and `web/functions.json` as literal
+  `https://localhost:3000` URLs, so changing `PORT` means editing those files too.

@@ -1,0 +1,89 @@
+---
+title: Configuration
+description: Environment variables, defaults, and limits used by the Excel Translate add-in host.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Every setting is an environment variable read once at import time by `scripts/dev_server.py`. There
+is no configuration file, and nothing is configurable from inside Excel.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HOST` | `127.0.0.1` | Interface the HTTPS server binds to. `docker-compose.yml` sets `0.0.0.0` so the port can be published out of the container. |
+| `PORT` | `3000` | Port the HTTPS server listens on. Changing it also means editing every `https://localhost:3000` URL in `manifest.xml` and `web/functions.json`. |
+| `LM_STUDIO_BASE_URL` | `http://127.0.0.1:1234/v1` | Base URL of LM Studio's OpenAI-compatible API. A trailing slash is stripped. `docker-compose.yml` sets `http://host.docker.internal:1234/v1`. |
+| `LM_STUDIO_MODEL` | *(empty)* | Pins a specific model id. When empty, the proxy calls `GET {base}/models` and uses the first returned id. |
+| `LM_STUDIO_API_TOKEN` | *(empty)* | Optional bearer token. When non-empty it is sent as `Authorization: Bearer <token>` on requests to LM Studio. LM Studio's local server normally needs no token, so leave it unset unless you have put the endpoint behind something that requires one. |
+
+<Aside type="caution" title="Keep the token out of the repository">
+`LM_STUDIO_API_TOKEN` is read from the environment only — there is no default value and no token
+file in this repository. If you need it, export it in your shell or supply it to
+`docker compose` through your own untracked env file. Never commit its value.
+</Aside>
+
+## Derived values
+
+Two URLs are built from `LM_STUDIO_BASE_URL` at startup:
+
+- `{LM_STUDIO_BASE_URL}/chat/completions` — used for every translation
+- `{LM_STUDIO_BASE_URL}/models` — used for model auto-detection
+
+## Certificate paths
+
+The paths are fixed, relative to the repository root, and not configurable:
+
+```text
+certs/localhost.pem       # certificate
+certs/localhost-key.pem   # private key
+```
+
+If either file is missing the server prints the expected paths and exits with status 1.
+
+## Fixed limits and behaviour
+
+These are hard-coded in the source rather than configurable:
+
+| Behaviour | Value | Where |
+| --- | --- | --- |
+| Max text values per `/api/translate` request | 128 (a larger request is rejected with HTTP 400) | `scripts/dev_server.py` |
+| Client-side chunk size | 64 values per request; larger ranges are split across several requests | `web/functions.js` |
+| Sampling temperature | `0.1` | `scripts/dev_server.py` |
+| Chat completion timeout | 120 seconds per text value | `scripts/dev_server.py` |
+| Model listing timeout | 30 seconds | `scripts/dev_server.py` |
+
+<Aside type="note" title="One request per cell">
+The proxy loops over the values in a batch and issues one chat completion per text value. A 64-cell
+range is 64 sequential model calls, so large ranges take a while and Excel may show the cells as
+pending for some time.
+</Aside>
+
+## Docker configuration
+
+`docker-compose.yml` defines a single service, `addin-host`, built from the local `Dockerfile`
+(`python:3.12-slim`), named `excel-translate-addin-host`, publishing `3000:3000` with:
+
+```yaml
+environment:
+  HOST: "0.0.0.0"
+  PORT: "3000"
+  LM_STUDIO_BASE_URL: "http://host.docker.internal:1234/v1"
+```
+
+Add `LM_STUDIO_MODEL` there if you want to pin a model for the containerised host.
+
+## npm scripts
+
+| Script | Runs |
+| --- | --- |
+| `npm start` | `python3 scripts/dev_server.py` |
+| `npm run install-manifest` | Copies `manifest.xml` into Excel's macOS sideload folder |
+| `npm run docker:up` | `docker compose up --build -d` |
+| `npm run docker:down` | `docker compose down` |
+| `npm run docker:logs` | Follows the `addin-host` logs |
+| `npm run docker:test` | Brings the container up, polls `/api/health`, then makes a sample translation call |
+| `npm run excel:reset` | Clears Excel's sideload and web caches (asks for confirmation) |
+| `npm run mac:trust-cert` | Trusts `certs/localhost.pem` in your login keychain |
+| `npm run docs:install` / `docs:dev` / `docs:build` | Work with the documentation site in `docs/` |

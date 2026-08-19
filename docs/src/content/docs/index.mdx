@@ -1,0 +1,73 @@
+---
+title: Excel Translate
+description: Excel for Mac custom functions that translate cells through a local LM Studio model.
+template: splash
+hero:
+  tagline: Translate spreadsheet cells with a worksheet formula, using a model that runs on your own machine.
+  actions:
+    - text: Install it
+      link: /excel-translate/getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/rennerdo30/excel-translate
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+## What it is
+
+Excel Translate is an Office Add-in for **Excel for Mac** that registers two custom worksheet
+functions in the `XLT` namespace:
+
+```text title="Worksheet formulas"
+=XLT.TRANSLATE(A2,"de")
+=XLT.TRANSLATE(A2,"en","de")
+=XLT.TRANSLATE_RANGE(A2:B10,"fr")
+```
+
+The formulas call a small local HTTPS host written with the Python standard library. That host
+serves the add-in's static files to Excel and proxies translation requests to
+[LM Studio](https://lmstudio.ai/docs/developer/core/server)'s OpenAI-compatible local API, using
+whichever model you have loaded there.
+
+## Why
+
+<CardGrid>
+  <Card title="Formula-first" icon="document">
+    Translation is a cell function, not a task-pane button. It recalculates and fills down like any
+    other formula.
+  </Card>
+  <Card title="Stays on your machine" icon="approve-check">
+    Text is sent to LM Studio on `localhost`. There is no cloud translation provider and no API key
+    to sign up for.
+  </Card>
+  <Card title="No build step" icon="rocket">
+    The add-in is plain HTML and JavaScript. The server is Python standard library only, with no
+    third-party packages.
+  </Card>
+  <Card title="Bring your own model" icon="setting">
+    Any chat/instruct model loaded in LM Studio works. Pin one with `LM_STUDIO_MODEL` or let the
+    proxy auto-detect the first model from `/v1/models`.
+  </Card>
+</CardGrid>
+
+## How the pieces fit
+
+1. Excel loads the add-in from `https://localhost:3000` using a sideloaded `manifest.xml`.
+2. `web/functions.js` implements `TRANSLATE` and `TRANSLATE_RANGE` and `POST`s to `/api/translate`.
+3. `scripts/dev_server.py` receives that request, builds a translation prompt, and calls LM Studio's
+   `/v1/chat/completions`.
+4. The translated strings come back to the cell (or spill across a range).
+
+See [Architecture](/excel-translate/guides/architecture/) for the full request path, and
+[Formula Reference](/excel-translate/guides/formulas/) for argument semantics.
+
+## Requirements
+
+- macOS with Excel for Mac that supports the Custom Functions runtime (`CustomFunctionsRuntime` 1.1)
+- Python 3.12+ (or Docker, which is the documented default path)
+- LM Studio with its local server running and a model loaded
+- A self-signed `localhost` certificate that you generate yourself — see
+  [Installation](/excel-translate/getting-started/installation/)

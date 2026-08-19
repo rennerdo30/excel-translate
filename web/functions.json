@@ -1,0 +1,62 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/office-js/custom-functions.schema.json",
+  "functions": [
+    {
+      "id": "TRANSLATE",
+      "name": "TRANSLATE",
+      "description": "Translate a single text value.",
+      "helpUrl": "https://localhost:3000/taskpane.html",
+      "parameters": [
+        {
+          "name": "text",
+          "description": "The text to translate.",
+          "type": "string"
+        },
+        {
+          "name": "targetLanguage",
+          "description": "Target language code such as de, en, or fr.",
+          "type": "string"
+        },
+        {
+          "name": "sourceLanguage",
+          "description": "Optional source language code. Use auto or leave it blank for detection.",
+          "type": "string",
+          "optional": true
+        }
+      ],
+      "result": {
+        "type": "string",
+        "dimensionality": "scalar"
+      }
+    },
+    {
+      "id": "TRANSLATE_RANGE",
+      "name": "TRANSLATE_RANGE",
+      "description": "Translate a cell or 2D range and return a spilled translated range.",
+      "helpUrl": "https://localhost:3000/taskpane.html",
+      "parameters": [
+        {
+          "name": "texts",
+          "description": "A single cell or a 2D range containing text.",
+          "type": "string",
+          "dimensionality": "matrix"
+        },
+        {
+          "name": "targetLanguage",
+          "description": "Target language code such as de, en, or fr.",
+          "type": "string"
+        },
+        {
+          "name": "sourceLanguage",
+          "description": "Optional source language code. Use auto or leave it blank for detection.",
+          "type": "string",
+          "optional": true
+        }
+      ],
+      "result": {
+        "type": "string",
+        "dimensionality": "matrix"
+      }
+    }
+  ]
+}

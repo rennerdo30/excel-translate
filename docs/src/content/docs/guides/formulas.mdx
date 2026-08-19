@@ -1,0 +1,131 @@
+---
+title: Formula Reference
+description: Arguments, return values, and error behaviour of XLT.TRANSLATE and XLT.TRANSLATE_RANGE.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Both functions live in the `XLT` namespace, declared in `manifest.xml` and described by
+`web/functions.json`.
+
+## XLT.TRANSLATE
+
+```text
+=XLT.TRANSLATE(text, targetLanguage, [sourceLanguage])
+```
+
+| Argument | Type | Notes |
+| --- | --- | --- |
+| `text` | string | The value to translate. Coerced to a string and trimmed. |
+| `targetLanguage` | string | Target language code, e.g. `de`, `en`, `fr`. Required. |
+| `sourceLanguage` | string, optional | Source language code. Blank or `auto` means the model detects it. |
+
+Returns a single string.
+
+```text
+=XLT.TRANSLATE(A2,"de")
+=XLT.TRANSLATE(A2,"en","de")
+```
+
+Behaviour worth knowing:
+
+- If `text` is empty, blank, or trims to nothing, the result is an empty string and **no** request is
+  sent to the model.
+- If `targetLanguage` is missing or blank, the cell shows
+  `[translation failed: target language is required]`.
+
+## XLT.TRANSLATE_RANGE
+
+```text
+=XLT.TRANSLATE_RANGE(texts, targetLanguage, [sourceLanguage])
+```
+
+| Argument | Type | Notes |
+| --- | --- | --- |
+| `texts` | matrix | A single cell or a 2D range. |
+| `targetLanguage` | string | Target language code. Required. |
+| `sourceLanguage` | string, optional | Source language code, or blank/`auto`. |
+
+Returns a matrix with the same shape as the input, which spills into the neighbouring cells.
+
+```text
+=XLT.TRANSLATE_RANGE(A2:B10,"fr")
+```
+
+Behaviour worth knowing:
+
+- Empty cells stay empty in the output and are never sent to the model. The function collects only
+  the non-empty values, remembers their `[row, column]` positions, and writes the results back into
+  the right slots.
+- Non-empty values are sent in chunks of 64 per HTTP request, so a wide range results in several
+  sequential requests.
+- On failure the whole result collapses to a single-cell matrix containing
+  `[translation failed: <message>]`.
+
+<Aside type="note" title="Sequential model calls">
+The server issues one chat completion per text value, one after another. A 100-cell range means 100
+model calls, so expect the spill range to fill in only after all of them finish.
+</Aside>
+
+## Error strings instead of Excel errors
+
+Neither function raises an Excel error value such as `#VALUE!`. Failures are returned as readable
+strings prefixed with `[translation failed: ...]`, which makes the underlying cause visible directly
+in the sheet. Typical messages come straight from the server:
+
+- `Could not reach LM Studio at <url>: <reason>` — LM Studio's local server is not running, or the
+  base URL is wrong.
+- `LM Studio did not return any available models. Start the LM Studio server and load a model first.`
+- `LM Studio translate request failed: HTTP <code> <body>` — the model call itself was rejected.
+- `This proxy accepts at most 128 text values per request.`
+
+## Translation prompt
+
+The server sends a system message instructing the model to act as a translation engine: return only
+the translated text, no commentary or quotes, be conservative with short or ambiguous input, and
+preserve proper nouns, personal names, brand names, product codes, numbers, URLs, email addresses and
+identifiers exactly as written. The user message names the source language (or "auto-detected
+language") and the target language, asks the model to preserve meaning, tone and formatting, and then
+supplies the text.
+
+Because the output quality is entirely the loaded model's, use an instruct/chat model that handles
+your language pair well. `temperature` is fixed at `0.1` to keep results stable across
+recalculations, but nothing about a local model guarantees identical output every time.
+
+## HTTP API
+
+The functions are thin clients over two endpoints on `https://localhost:3000`.
+
+### `GET /api/health`
+
+```json
+{
+  "ok": true,
+  "defaultProvider": "lm_studio",
+  "lmStudioBaseUrl": "http://127.0.0.1:1234/v1",
+  "activeModel": "<resolved model id>",
+  "configuredModel": "<LM_STUDIO_MODEL or empty>",
+  "message": "Excel add-in host is running."
+}
+```
+
+Returns HTTP 502 with `"ok": false` and an `error` field when LM Studio cannot be reached.
+
+### `POST /api/translate`
+
+```json
+{
+  "sourceLanguage": "auto",
+  "targetLanguage": "de",
+  "texts": ["Hello world"]
+}
+```
+
+Responds with `{"translations": ["..."]}` in the same order as the input. `targetLanguage` and a
+non-empty `texts` array are required; more than 128 values is rejected with HTTP 400. Errors reaching
+LM Studio surface as HTTP 502 with an `error` field.
+
+<Aside type="caution" title="Development server only">
+The host is a `ThreadingHTTPServer` from the Python standard library with no authentication, no rate
+limiting, and no CORS restrictions. Bind it to loopback and do not expose it beyond your own machine.
+</Aside>

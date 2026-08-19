@@ -1,0 +1,181 @@
+:root {
+  color-scheme: light;
+  --bg: #f5f0e8;
+  --card: rgba(255, 252, 247, 0.9);
+  --line: rgba(98, 70, 43, 0.15);
+  --text: #23180e;
+  --muted: #6e5b4a;
+  --accent: #b45f06;
+  --accent-strong: #8f4a05;
+  --accent-soft: rgba(180, 95, 6, 0.12);
+  --shadow: 0 20px 45px rgba(35, 24, 14, 0.08);
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 153, 0.55), transparent 42%),
+    linear-gradient(180deg, #fbf6ef 0%, var(--bg) 100%);
+  color: var(--text);
+}
+
+.shell {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.hero {
+  padding: 8px 2px 2px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+.intro {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  backdrop-filter: blur(10px);
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.field,
+.choice {
+  display: grid;
+  gap: 8px;
+}
+
+.field span,
+.field-label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+button {
+  font: inherit;
+}
+
+button:focus {
+  outline: 2px solid rgba(180, 95, 6, 0.25);
+  outline-offset: 2px;
+}
+
+.choice {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  padding: 8px 0;
+}
+
+.choice input {
+  margin-top: 4px;
+}
+
+.actions {
+  padding-top: 8px;
+}
+
+button {
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 12px 16px;
+  transition: transform 120ms ease, background-color 120ms ease, opacity 120ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+}
+
+.primary {
+  background: linear-gradient(135deg, var(--accent) 0%, #d97706 100%);
+  color: white;
+  font-weight: 700;
+}
+
+.secondary {
+  margin-top: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.formula-list {
+  display: grid;
+  gap: 10px;
+}
+
+.formula-list code,
+.readonly-box {
+  border: 1px solid rgba(98, 70, 43, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 10px 12px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+}
+
+.hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.hint code {
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.status {
+  min-height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+@media (min-width: 560px) {
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

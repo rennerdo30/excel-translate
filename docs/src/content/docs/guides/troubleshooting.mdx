@@ -1,0 +1,130 @@
+---
+title: Troubleshooting
+description: Fixing #NAME? errors, certificate trust problems, and LM Studio connection failures.
+---
+
+import { Steps, Aside } from "@astrojs/starlight/components";
+
+## Excel shows `#NAME?`
+
+`#NAME?` means Excel does not know the function — the custom-functions runtime has not registered the
+`XLT` namespace for your profile yet. This is common after editing `manifest.xml`.
+
+<Steps>
+1. Quit Excel completely (not just the workbook window).
+
+2. Clear Excel's caches:
+   ```bash
+   npm run excel:reset
+   ```
+   The script asks you to type `YES` to confirm, then empties
+   `~/Library/Containers/com.microsoft.Excel/Data/Documents/wef` and
+   `~/Library/Containers/com.Microsoft.OsfWebHost/Data`.
+
+3. Reinstall the manifest:
+   ```bash
+   npm run install-manifest
+   ```
+
+4. If Excel reported an installation error, make sure the certificate is trusted:
+   ```bash
+   npm run mac:trust-cert
+   ```
+
+5. Reopen Excel and launch **Cell Translator** once from the Add-ins list.
+
+6. Test in a fresh workbook:
+   ```text
+   =XLT.TRANSLATE(A1,"de")
+   ```
+</Steps>
+
+## The server will not start
+
+```text
+Missing HTTPS certificate files.
+Expected: .../certs/localhost.pem
+Expected: .../certs/localhost-key.pem
+```
+
+Both files must exist. Generate them as shown in
+[Installation](/excel-translate/getting-started/installation/). The repository ships no key material
+on purpose.
+
+## The Docker build fails on `COPY certs ./certs`
+
+The `Dockerfile` copies `certs/` into the image, so the certificate has to exist on the host **before**
+you build. Generate it first, then run `npm run docker:up` again.
+
+## Excel refuses to load the add-in, or the pane is blank
+
+This is almost always TLS trust. Verify the host answers first:
+
+```bash
+curl -k https://localhost:3000/api/health
+```
+
+- If `curl -k` works but Excel does not, the certificate is reachable but not trusted. Run
+  `npm run mac:trust-cert`, then quit and reopen Excel.
+- If `curl` fails to connect at all, the host is not running. Check `npm run docker:logs`, or start it
+  directly with `npm start` to see the error in your terminal.
+- Confirm nothing else already holds port 3000.
+
+<Aside type="tip" title="Removing the trust entry">
+```bash
+security delete-certificate -c localhost "$HOME/Library/Keychains/login.keychain-db"
+```
+Do this whenever you regenerate the certificate, then trust the new one — otherwise the keychain holds
+a stale entry for `localhost`.
+</Aside>
+
+## Cells show `[translation failed: Could not reach LM Studio at ...]`
+
+The proxy could not open a connection to LM Studio.
+
+- Start LM Studio's local server from the **Developer** tab and load a model.
+- Check the URL reported by `/api/health` against where LM Studio is actually listening (default
+  `http://127.0.0.1:1234/v1`).
+- Running in Docker, the container cannot use `127.0.0.1` to reach your Mac. `docker-compose.yml`
+  therefore sets `LM_STUDIO_BASE_URL` to `http://host.docker.internal:1234/v1`. If you overrode it
+  with a loopback address, that is the problem.
+
+## Cells show `[translation failed: LM Studio did not return any available models...]`
+
+LM Studio's server is up but has nothing loaded. Load a chat/instruct model, or pin a known id with
+`LM_STUDIO_MODEL` — see [Configuration](/excel-translate/getting-started/configuration/).
+
+## Cells show `[translation failed: LM Studio translate request failed: HTTP ...]`
+
+LM Studio rejected the completion request. The HTTP status and response body are included in the
+message. Usual causes are a model id that is no longer loaded, or a model that cannot handle the
+request. Try clearing `LM_STUDIO_MODEL` so the proxy auto-detects, or reload the model.
+
+## A large range is slow or seems stuck
+
+Expected. The proxy makes one model call per cell, sequentially, with a 120-second timeout each. A
+64-cell range is 64 round trips. Translate in smaller batches, or use a faster model.
+
+## `[translation failed: This proxy accepts at most 128 text values per request.]`
+
+`web/functions.js` chunks at 64 values per request, so you should not normally hit the server's limit
+of 128 unless you call `/api/translate` yourself. Split the request.
+
+## The formula returns `[translation failed: target language is required]`
+
+The second argument was blank. `targetLanguage` is mandatory:
+
+```text
+=XLT.TRANSLATE(A2,"de")
+```
+
+## Checking the whole chain quickly
+
+```bash
+npm run docker:test
+```
+
+This brings the container up, polls `https://localhost:3000/api/health` for up to 30 seconds, prints
+the health payload, and then makes one real translation call for `"Hello world"` into German. If both
+steps print sensible output, the server and LM Studio are wired up correctly and any remaining problem
+is on the Excel side.

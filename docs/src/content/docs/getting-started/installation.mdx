@@ -1,0 +1,154 @@
+---
+title: Installation
+description: Generate a localhost certificate, start the add-in host, and sideload the manifest into Excel for Mac.
+---
+
+import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+
+## Prerequisites
+
+- macOS with Excel for Mac (the add-in requires the `CustomFunctionsRuntime` 1.1 requirement set)
+- [LM Studio](https://lmstudio.ai/) with its local server started and a model loaded
+- Either **Docker** (the default path used by the `npm run docker:*` scripts) or **Python 3.12+** to
+  run the server directly
+- `openssl` and `security`, both of which ship with macOS
+
+<Aside type="caution" title="No certificate is shipped">
+The repository deliberately contains **no** TLS key or certificate. `certs/` is git-ignored apart
+from a `.gitkeep` placeholder. You must generate your own key pair before the host will start —
+`scripts/dev_server.py` exits with a non-zero status and prints the expected paths if
+`certs/localhost.pem` or `certs/localhost-key.pem` is missing.
+</Aside>
+
+## 1. Generate your own localhost certificate
+
+Office Add-ins must be served over HTTPS, and a self-signed certificate is acceptable for local
+development as long as the machine trusts it. Run this from the repository root:
+
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 \
+  -keyout certs/localhost-key.pem \
+  -out certs/localhost.pem \
+  -days 365 -nodes \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+This writes an unencrypted private key (`-nodes`) that is only ever used by the local dev server.
+Keep it out of version control — the provided `.gitignore` already does that. Tighten the
+permissions if you like:
+
+```bash
+chmod 600 certs/localhost-key.pem
+```
+
+## 2. Trust the certificate
+
+Excel will refuse to load the add-in if the certificate is not trusted. The repository ships a
+helper, `scripts/trust-localhost-cert.sh`, exposed as an npm script:
+
+```bash
+npm run mac:trust-cert
+```
+
+The script checks that `certs/localhost.pem` exists, then runs:
+
+```bash
+security add-trusted-cert -d -r trustRoot \
+  -k "$HOME/Library/Keychains/login.keychain-db" \
+  certs/localhost.pem
+```
+
+macOS will prompt for your password. To undo it later:
+
+```bash
+security delete-certificate -c localhost \
+  "$HOME/Library/Keychains/login.keychain-db"
+```
+
+<Aside type="caution" title="Understand what you are trusting">
+`-r trustRoot` marks this self-signed certificate as a trusted root in your login keychain. Anything
+holding that private key can then impersonate `localhost` for your user account. Generate the key
+yourself, never share it, never reuse one across machines, and remove the trust entry when you are
+finished with the add-in.
+</Aside>
+
+## 3. Start the add-in host
+
+<Tabs>
+  <TabItem label="Docker (default)">
+    ```bash
+    npm run docker:up
+    ```
+
+    This runs `docker compose up --build -d`. The image copies `certs/`, `scripts/` and `web/` in, so
+    the certificate must already exist when you build. The container listens on `0.0.0.0:3000`,
+    published as `https://localhost:3000`, and reaches LM Studio through
+    `http://host.docker.internal:1234/v1`.
+  </TabItem>
+  <TabItem label="Python directly">
+    ```bash
+    npm start
+    # equivalent to: python3 scripts/dev_server.py
+    ```
+
+    Run directly, the server binds `127.0.0.1:3000` and talks to LM Studio at
+    `http://127.0.0.1:1234/v1`. No third-party Python packages are required.
+  </TabItem>
+</Tabs>
+
+Check that it is up:
+
+```bash
+curl -k https://localhost:3000/api/health
+```
+
+A healthy response reports the LM Studio base URL and the active model. See
+[Configuration](/excel-translate/getting-started/configuration/) for every environment variable.
+
+## 4. Start LM Studio's local server
+
+In LM Studio, open the **Developer** tab, start the local server, and confirm a model is loaded. The
+proxy calls `GET /v1/models` and uses the first entry it finds unless you pin `LM_STUDIO_MODEL`.
+
+## 5. Sideload the manifest into Excel
+
+```bash
+npm run install-manifest
+```
+
+`scripts/install_manifest.sh` copies `manifest.xml` to:
+
+```text
+~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/cell-translator-manifest.xml
+```
+
+## 6. Register the functions once
+
+<Steps>
+1. Quit Excel completely and reopen it.
+
+2. Open a workbook and go to **Home → Add-ins**.
+
+3. Launch **Cell Translator** once. This first launch is what registers the custom functions for
+   your Excel user profile.
+
+4. In any cell, try:
+   ```text
+   =XLT.TRANSLATE(A1,"de")
+   ```
+</Steps>
+
+If Excel shows `#NAME?`, the custom-functions runtime has not registered yet — see
+[Troubleshooting](/excel-translate/guides/troubleshooting/).
+
+## Documentation site
+
+This site lives in `docs/` and is a standard Astro Starlight project:
+
+```bash
+cd docs
+npm install
+npm run build
+```
